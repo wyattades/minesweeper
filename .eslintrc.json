@@ -1,0 +1,6 @@
+{
+  "extends": "pretty",
+  "rules": {
+    "react/jsx-filename-extension": "off"
+  }
+}
