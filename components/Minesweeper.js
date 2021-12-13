@@ -341,16 +341,16 @@ export const Minesweeper = () => {
         ) : null}
 
         <div className="flex justify-between items-center w-full">
-          {gameState !== "ready" ? (
-            <button
-              onClick={reset}
-              className="px-3 py-1 border border-red-400 rounded bg-red-100 hover:bg-red-200"
-            >
-              Reset
-            </button>
-          ) : (
-            <div />
-          )}
+          <button
+            disabled={gameState === "ready"}
+            onClick={reset}
+            className={clsx(
+              "px-3 py-1 border border-red-400 rounded bg-red-100 hover:bg-red-200",
+              gameState === "ready" && "pointer-events-none opacity-70"
+            )}
+          >
+            Reset
+          </button>
 
           <p className="px-3 py-1 border border-gray-400 rounded bg-gray-200">
             Mines found: {foundMineCount} out of {mineCount}
