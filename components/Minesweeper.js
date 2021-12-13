@@ -17,6 +17,7 @@ const CellState = {
   FLAGGED: 10,
   QFLAGGED: 11,
   MINE: 12,
+  FAILED: 13,
 };
 
 const MineState = {
@@ -26,11 +27,12 @@ const MineState = {
 };
 
 const CellStateClassNames = {
-  0: "cell-unknown",
-  9: "cell-empty",
-  10: "cell-flagged",
-  11: "cell-qflagged",
-  12: "cell-mine",
+  [CellState.UNKNOWN]: "cell-unknown",
+  [CellState.EMPTY]: "cell-empty",
+  [CellState.FLAGGED]: "cell-flagged",
+  [CellState.QFLAGGED]: "cell-qflagged",
+  [CellState.MINE]: "cell-mine",
+  [CellState.FAILED]: "cell-failed",
 };
 
 // [delta-x,delta-y] for the 8 squares surrounding a square
@@ -165,6 +167,38 @@ export const Minesweeper = () => {
     setInputState(next);
   };
 
+  // set adjacent mine counts
+  const populateAdjacentCounts = (
+    currentMineState = mineState,
+    nextInputState
+  ) => {
+    for (let px = 0; px < cellsX; px++) {
+      for (let py = 0; py < cellsY; py++) {
+        const cell = nextInputState[cellsX * py + px];
+        if (cell === CellState.EMPTY) {
+          let adjacentMines = 0;
+          for (const [dx, dy] of aroundAllPoints) {
+            const nx = px + dx,
+              ny = py + dy;
+            if (
+              nx >= 0 &&
+              ny >= 0 &&
+              nx < cellsX &&
+              ny < cellsY &&
+              currentMineState[cellsX * ny + nx] === MineState.MINE
+            )
+              adjacentMines++;
+          }
+          if (adjacentMines > 0) {
+            nextInputState[cellsX * py + px] = adjacentMines;
+          }
+        }
+      }
+    }
+
+    return nextInputState;
+  };
+
   const setEmptyCells = (x, y, currentMineState = mineState) => {
     // setCell(x, y, CellState.EMPTY);
 
@@ -181,30 +215,7 @@ export const Minesweeper = () => {
       return false;
     });
 
-    // set adjacent mine counts
-    for (let px = 0; px < cellsX; px++) {
-      for (let py = 0; py < cellsY; py++) {
-        const cell = next[cellsX * py + px];
-        if (cell === CellState.EMPTY) {
-          let adjacentMines = 0;
-          for (const [dx, dy] of aroundAllPoints) {
-            const nx = px + dx,
-              ny = py + dy;
-            if (
-              nx >= 0 &&
-              ny >= 0 &&
-              nx < cellsX &&
-              ny < cellsY &&
-              currentMineState[cellsX * ny + nx] === MineState.MINE
-            )
-              adjacentMines++;
-          }
-          if (adjacentMines > 0) {
-            next[cellsX * py + px] = adjacentMines;
-          }
-        }
-      }
-    }
+    populateAdjacentCounts(currentMineState, next);
 
     setInputState(next);
   };
@@ -227,8 +238,9 @@ export const Minesweeper = () => {
     x = Number(x);
     y = Number(y);
 
-    const cell = inputState[cellsX * y + x];
-    const cellMine = mineState[cellsX * y + x];
+    const index = cellsX * y + x;
+    const cell = inputState[index];
+    const cellMine = mineState[index];
 
     const rightClick = e.button === 2;
 
@@ -244,11 +256,15 @@ export const Minesweeper = () => {
           setEmptyCells(x, y, newMineState);
           setGameState("playing");
         } else if (cellMine === MineState.MINE) {
-          setInputState(
-            mineState.map((m) =>
-              m === MineState.MINE ? CellState.MINE : CellState.EMPTY
-            )
+          const next = mineState.map((m, i) =>
+            m === MineState.MINE ? CellState.MINE : CellState.EMPTY
           );
+
+          populateAdjacentCounts(mineState, next);
+
+          next[index] = CellState.FAILED;
+
+          setInputState(next);
 
           setGameState("lose");
         } else {
@@ -283,12 +299,6 @@ export const Minesweeper = () => {
   return (
     <>
       <div className="flex flex-col items-center">
-        {gameState === "win" ? (
-          <p className="text-lg text-green-500 font-bold mb-8">You win!</p>
-        ) : gameState === "lose" ? (
-          <p className="text-lg text-red-500 font-bold mb-8">You lose!</p>
-        ) : null}
-
         <div
           className="game-grid border-4 border-gray-600 mb-10"
           ref={gameDOMRef}
@@ -323,6 +333,12 @@ export const Minesweeper = () => {
             );
           })}
         </div>
+
+        {gameState === "win" ? (
+          <p className="text-xl text-green-500 font-bold mb-8">You win!</p>
+        ) : gameState === "lose" ? (
+          <p className="text-xl text-red-500 font-bold mb-8">You lose!</p>
+        ) : null}
 
         <div className="flex justify-between items-center w-full">
           {gameState !== "ready" ? (
@@ -375,34 +391,28 @@ export const Minesweeper = () => {
           background: #ddd;
         }
 
-        .game-cell.cell-flagged::after {
+        .game-cell::after {
           display: block;
           position: absolute;
           left: 50%;
           top: 50%;
           transform: translate(-50%, -50%);
           font-size: 1rem;
+        }
 
+        .game-cell.cell-flagged::after {
           content: "🚩";
         }
         .game-cell.cell-qflagged::after {
-          display: block;
-          position: absolute;
-          left: 50%;
-          top: 50%;
-          transform: translate(-50%, -50%);
-          font-size: 1rem;
-
           content: "❓";
         }
         .game-cell.cell-mine::after {
-          display: block;
-          position: absolute;
-          left: 50%;
-          top: 50%;
-          transform: translate(-50%, -50%);
-          font-size: 1rem;
-
+          content: "💣";
+        }
+        .game-cell.cell-failed {
+          background: red;
+        }
+        .game-cell.cell-failed::after {
           content: "💣";
         }
 
@@ -411,12 +421,6 @@ export const Minesweeper = () => {
           background: #ddd;
         }
         .game-cell[data-adjacent-mines]::after {
-          display: block;
-          position: absolute;
-          left: 50%;
-          top: 50%;
-          transform: translate(-50%, -50%);
-
           font-size: 1.5rem;
           content: attr(data-adjacent-mines);
           color: black;
