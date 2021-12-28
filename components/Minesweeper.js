@@ -1,5 +1,14 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
 import _ from "lodash";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+
+const fill = (length, value = undefined) => {
+  const arr = [];
+  const isFunc = _.isFunction(value);
+  for (let i = 0; i < length; i++) {
+    arr.push(isFunc ? value(i) : value);
+  }
+  return arr;
+};
 
 const clsx = (...syms) => syms.filter(Boolean).join(" ");
 
@@ -95,7 +104,7 @@ const bfs = (
   cellsX,
   cellsY,
   fn,
-  visited = Array.from({ length: cellsX * cellsY }).map(() => false)
+  visited = fill(cellsX * cellsY, false)
 ) => {
   const index = cellsX * y + x;
   if (visited[index]) return;
@@ -113,10 +122,51 @@ const bfs = (
   }
 };
 
+// set adjacent mine counts
+const populateAdjacentCounts = (cellsX, cellsY, mineState, nextInputState) => {
+  for (let px = 0; px < cellsX; px++) {
+    for (let py = 0; py < cellsY; py++) {
+      const cell = nextInputState[cellsX * py + px];
+      if (cell === CellState.EMPTY) {
+        let adjacentMines = 0;
+        for (const [dx, dy] of aroundAllPoints) {
+          const nx = px + dx,
+            ny = py + dy;
+          if (
+            nx >= 0 &&
+            ny >= 0 &&
+            nx < cellsX &&
+            ny < cellsY &&
+            mineState[cellsX * ny + nx] === MineState.MINE
+          )
+            adjacentMines++;
+        }
+        if (adjacentMines > 0) {
+          nextInputState[cellsX * py + px] = adjacentMines;
+        }
+      }
+    }
+  }
+
+  return nextInputState;
+};
+
+const isGameWon = (inputState, mineState) => {
+  for (let i = 0; i < inputState.length; i++) {
+    if (
+      inputState[i] === CellState.FLAGGED &&
+      mineState[i] !== MineState.MINE
+    ) {
+      return false;
+    }
+  }
+  return true;
+};
+
 const emptyInputState = (cellsX, cellsY) =>
-  Array.from({ length: cellsX * cellsY }).map(() => CellState.UNKNOWN);
+  fill(cellsX * cellsY, CellState.UNKNOWN);
 const unsetMineState = (cellsX, cellsY) =>
-  Array.from({ length: cellsX * cellsY }).map(() => MineState.UNSET);
+  fill(cellsX * cellsY, MineState.UNSET);
 
 const Timer = ({ gameState }) => {
   const [time, setTime] = useState("-");
@@ -167,38 +217,6 @@ export const Minesweeper = () => {
     setInputState(next);
   };
 
-  // set adjacent mine counts
-  const populateAdjacentCounts = (
-    currentMineState = mineState,
-    nextInputState
-  ) => {
-    for (let px = 0; px < cellsX; px++) {
-      for (let py = 0; py < cellsY; py++) {
-        const cell = nextInputState[cellsX * py + px];
-        if (cell === CellState.EMPTY) {
-          let adjacentMines = 0;
-          for (const [dx, dy] of aroundAllPoints) {
-            const nx = px + dx,
-              ny = py + dy;
-            if (
-              nx >= 0 &&
-              ny >= 0 &&
-              nx < cellsX &&
-              ny < cellsY &&
-              currentMineState[cellsX * ny + nx] === MineState.MINE
-            )
-              adjacentMines++;
-          }
-          if (adjacentMines > 0) {
-            nextInputState[cellsX * py + px] = adjacentMines;
-          }
-        }
-      }
-    }
-
-    return nextInputState;
-  };
-
   const setEmptyCells = (x, y, currentMineState = mineState) => {
     // setCell(x, y, CellState.EMPTY);
 
@@ -215,13 +233,12 @@ export const Minesweeper = () => {
       return false;
     });
 
-    populateAdjacentCounts(currentMineState, next);
+    populateAdjacentCounts(cellsX, cellsY, currentMineState, next);
 
     setInputState(next);
   };
 
   const gameDOMRef = useRef();
-
   useEffect(() => {
     const cb = (e) => {
       e.preventDefault();
@@ -260,7 +277,7 @@ export const Minesweeper = () => {
             m === MineState.MINE ? CellState.MINE : CellState.EMPTY
           );
 
-          populateAdjacentCounts(mineState, next);
+          populateAdjacentCounts(cellsX, cellsY, mineState, next);
 
           next[index] = CellState.FAILED;
 
@@ -279,20 +296,8 @@ export const Minesweeper = () => {
   }, [inputState]);
 
   useEffect(() => {
-    if (foundMineCount === mineCount) {
-      let valid = true;
-      for (let i = 0; i < inputState.length; i++) {
-        if (
-          inputState[i] === CellState.FLAGGED &&
-          mineState[i] !== MineState.MINE
-        ) {
-          valid = false;
-          break;
-        }
-      }
-      if (valid) {
-        setGameState("win");
-      }
+    if (foundMineCount === mineCount && isGameWon(inputState, mineState)) {
+      setGameState("win");
     }
   }, [inputState, foundMineCount]);
 
@@ -303,10 +308,10 @@ export const Minesweeper = () => {
           className="game-grid border-4 border-gray-600 mb-10"
           ref={gameDOMRef}
         >
-          {Array.from({ length: cellsY }).map((_a, y) => {
+          {fill(cellsY, (y) => {
             return (
               <div key={y} className="game-row">
-                {Array.from({ length: cellsX }).map((_b, x) => {
+                {fill(cellsX, (x) => {
                   const cell = inputState[cellsX * y + x];
 
                   const clickable =
